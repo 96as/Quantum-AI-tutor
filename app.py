@@ -1,6 +1,7 @@
 import streamlit as st
 import plotly.graph_objects as go
-from mock_data import MOCK_RESULTS, DEFAULT_RESULT
+
+from ui_adapter import result_from_prompt
 
 st.set_page_config(page_title="QuantumAI", layout="wide")
 
@@ -103,11 +104,8 @@ with col_reset:
         st.rerun()
 
 if run and prompt:
-    result = DEFAULT_RESULT
-    for keyword, data in MOCK_RESULTS.items():
-        if keyword in prompt.lower():
-            result = data
-            break
+    with st.spinner("Generating Qiskit code and running Qiskit Aer..."):
+        result = result_from_prompt(prompt)
 
     st.divider()
 
@@ -119,14 +117,17 @@ if run and prompt:
 
     with col_chart:
         st.markdown("**Output Distribution**")
-        states = list(result["actual_distribution"].keys())
+        states = sorted(
+            set(result["actual_distribution"].keys())
+            | set(result["expected_distribution"].keys())
+        )
         fig = go.Figure()
-        fig.add_bar(name="Actual",   x=states, y=list(result["actual_distribution"].values()), marker_color="#1A8C6E")
-        fig.add_bar(name="Expected", x=states, y=list(result["expected_distribution"].values()), marker_color="#A78BDB", opacity=0.55)
+        fig.add_bar(name="Actual",   x=states, y=[result["actual_distribution"].get(state, 0) for state in states], marker_color="#1A8C6E")
+        fig.add_bar(name="Expected", x=states, y=[result["expected_distribution"].get(state, 0) for state in states], marker_color="#A78BDB", opacity=0.55)
         fig.update_layout(
             barmode="overlay", height=310,
             yaxis=dict(tickformat=".0%", gridcolor="rgba(255,255,255,.08)", color="rgba(255,255,255,.6)"),
-            xaxis=dict(color="rgba(255,255,255,.6)"),
+            xaxis=dict(type="category", color="rgba(255,255,255,.6)"),
             legend=dict(orientation="h", y=1.12, font=dict(color="rgba(255,255,255,.7)")),
             margin=dict(t=10, b=40, l=40, r=10),
             plot_bgcolor="rgba(255,255,255,.03)",
