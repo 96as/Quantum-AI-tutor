@@ -12,7 +12,8 @@ from dotenv import load_dotenv
 
 from backend.quantumai.models import Distribution, GeneratedCircuit
 
-DEFAULT_MODEL = "claude-3-5-sonnet-latest"
+DEFAULT_MODEL = "claude-sonnet-4-6"
+EXPECTED_DISTRIBUTION_MAX_TOKENS = 1200
 
 
 class LLMResponseError(ValueError):
@@ -29,6 +30,11 @@ def _api_key() -> str:
 
 def _client() -> Anthropic:
     return Anthropic(api_key=_api_key())
+
+
+def _model() -> str:
+    load_dotenv()
+    return os.getenv("ANTHROPIC_MODEL", DEFAULT_MODEL)
 
 
 def _message_text(message: Any) -> str:
@@ -48,15 +54,35 @@ def _strip_markdown_fence(text: str) -> str:
     return stripped
 
 
+def _candidate_json_objects(text: str) -> list[str]:
+    candidates = [_strip_markdown_fence(text)]
+    candidates.extend(
+        match.group(1).strip()
+        for match in re.finditer(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    )
+
+    decoder = json.JSONDecoder()
+    for index, character in enumerate(text):
+        if character != "{":
+            continue
+        try:
+            _, end = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        candidates.append(text[index : index + end])
+    return candidates
+
+
 def _extract_json_object(text: str) -> dict[str, Any]:
-    raw = _strip_markdown_fence(text)
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise LLMResponseError("LLM response must be valid JSON") from exc
-    if not isinstance(parsed, dict):
-        raise LLMResponseError("LLM response must be a JSON object")
-    return parsed
+    for raw in _candidate_json_objects(text):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, dict):
+            raise LLMResponseError("LLM response must be a JSON object")
+        return parsed
+    raise LLMResponseError("LLM response must be valid JSON")
 
 
 def parse_expected_distribution(text: str) -> Distribution:
@@ -113,7 +139,7 @@ def generate_circuit(prompt: str) -> GeneratedCircuit:
     )
     user = f"Generate Qiskit code for this request:\n{prompt}"
     message = _client().messages.create(
-        model=DEFAULT_MODEL,
+        model=_model(),
         max_tokens=1600,
         temperature=0,
         system=system,
@@ -134,17 +160,20 @@ def get_expected_distribution(prompt: str, code: str) -> Distribution:
 
     system = (
         "You identify ideal quantum measurement distributions for small Qiskit "
-        "circuits. Return strict JSON only. Use bitstring keys and numeric "
-        'probabilities, for example {"00": 0.5, "11": 0.5}. Do not include prose.'
+        "circuits. Your entire response must be one compact JSON object and "
+        "nothing else. Use bitstring keys and numeric probabilities, for example "
+        '{"00": 0.5, "11": 0.5}. Do not include prose, markdown, equations, '
+        "analysis, code fences, or explanations."
     )
     user = (
         "Given this user request and generated Qiskit code, return the ideal "
-        "expected measurement distribution.\n\n"
+        "expected measurement distribution. Respond with only the final JSON "
+        "object, starting with { and ending with }.\n\n"
         f"Request:\n{prompt}\n\nCode:\n{code}"
     )
     message = _client().messages.create(
-        model=DEFAULT_MODEL,
-        max_tokens=500,
+        model=_model(),
+        max_tokens=EXPECTED_DISTRIBUTION_MAX_TOKENS,
         temperature=0,
         system=system,
         messages=[{"role": "user", "content": user}],

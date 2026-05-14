@@ -27,3 +27,21 @@ def test_execute_circuit_returns_controlled_error_for_invalid_code():
     assert result.distribution == {}
     assert result.counts == {}
     assert "missing_name" in result.error
+
+
+def test_execute_circuit_ignores_generated_print_statements():
+    code = """
+from qiskit import QuantumCircuit
+
+qc = QuantumCircuit(2, 2)
+qc.h(0)
+qc.cx(0, 1)
+qc.measure([0, 1], [0, 1])
+
+print(qc.draw(output="text"))
+"""
+
+    result = execute_circuit(code, shots=256)
+
+    assert result.success is True
+    assert set(result.distribution).issubset({"00", "11"})

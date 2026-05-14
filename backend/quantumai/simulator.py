@@ -32,6 +32,7 @@ def _execution_namespace() -> dict[str, Any]:
         "list": list,
         "max": max,
         "min": min,
+        "print": lambda *args, **kwargs: None,
         "range": range,
         "set": set,
         "sum": sum,

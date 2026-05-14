@@ -16,9 +16,12 @@ Create a local `.env` file with your Claude API key:
 
 ```bash
 ANTHROPIC_API_KEY=your_anthropic_api_key
+ANTHROPIC_MODEL=claude-sonnet-4-6
 ```
 
-The backend also supports the existing `API_KEY` name as a fallback.
+The backend also supports the existing `API_KEY` name as a fallback. If the
+default model is unavailable for your Anthropic account, set `ANTHROPIC_MODEL`
+to one of the IDs returned by Anthropic's model list endpoint.
 
 ## Team A public API
 
