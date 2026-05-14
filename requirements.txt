@@ -1,0 +1,7 @@
+
+streamlit
+plotly
+numpy
+qiskit
+qiskit-aer
+anthropic
