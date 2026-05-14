@@ -1,0 +1,5 @@
+qiskit
+qiskit-aer
+anthropic
+python-dotenv
+pytest
