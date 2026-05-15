@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from backend.quantumai import run_pipeline
+from backend.quantumai.bug_checker import check_bugs
+from backend.quantumai.explainer import explain
 
 
 PipelineCallable = Callable[[str, int], Any]
@@ -22,25 +24,26 @@ def adapt_pipeline_result(payload: dict[str, Any]) -> dict[str, Any]:
     verification_passed = status == "ok"
     algorithm = payload.get("algorithm") or "the generated circuit"
 
+    code = payload.get("code", "")
+    actual = payload.get("actual_distribution", {})
+    expected = payload.get("expected_distribution", {})
+
     if verification_passed:
         verification_message = "Generation and simulation completed."
-        explanation = (
-            f"Team A generated and simulated {algorithm}. "
-            "The chart compares the measured Aer distribution with the expected "
-            "distribution returned by Claude. Team B will add deeper verification, "
-            "bug flags, and a plain-language explanation."
-        )
+        bugs = check_bugs(code)
+        explanation = explain(code, actual, expected)
     else:
         verification_message = "; ".join(str(error) for error in errors) or "Pipeline failed."
+        bugs = []
         explanation = "The backend could not complete this request."
 
     return {
-        "code": payload.get("code", ""),
-        "actual_distribution": payload.get("actual_distribution", {}),
-        "expected_distribution": payload.get("expected_distribution", {}),
+        "code": code,
+        "actual_distribution": actual,
+        "expected_distribution": expected,
         "verification_passed": verification_passed,
         "verification_message": verification_message,
-        "bugs": [],
+        "bugs": bugs,
         "explanation": explanation,
     }
 
